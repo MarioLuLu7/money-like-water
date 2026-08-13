@@ -12,6 +12,12 @@ Download the latest Windows build from GitHub Releases:
 https://github.com/MarioLuLu7/money-like-water/releases/latest
 ```
 
+Direct download for v0.1.0:
+
+```text
+https://github.com/MarioLuLu7/money-like-water/releases/download/v0.1.0/money-like-water-v0.1.0-windows-x64.zip
+```
+
 ## Features
 
 - Windows taskbar meter with configurable position, text size, colors, and reset-time display.
@@ -95,6 +101,12 @@ Money Like Water 是一个面向 Windows 的 AI 服务用量监控桌面应用�
 
 ```text
 https://github.com/MarioLuLu7/money-like-water/releases/latest
+```
+
+v0.1.0 直接下载地址：
+
+```text
+https://github.com/MarioLuLu7/money-like-water/releases/download/v0.1.0/money-like-water-v0.1.0-windows-x64.zip
 ```
 
 ## 功能
