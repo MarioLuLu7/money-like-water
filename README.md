@@ -6,17 +6,9 @@ The app is built with Tauri 2, React, TypeScript, and Rust. It currently include
 
 ## Download
 
-Download the latest Windows build from GitHub Releases:
+Download the latest Windows build from [GitHub Releases](https://github.com/MarioLuLu7/money-like-water/releases/latest).
 
-```text
-https://github.com/MarioLuLu7/money-like-water/releases/latest
-```
-
-Direct download for v0.1.0:
-
-```text
-https://github.com/MarioLuLu7/money-like-water/releases/download/v0.1.0/money-like-water-v0.1.0-windows-x64.zip
-```
+[Download v0.1.0 for Windows x64](https://github.com/MarioLuLu7/money-like-water/releases/download/v0.1.0/money-like-water-v0.1.0-windows-x64.zip)
 
 ## Features
 
@@ -97,17 +89,9 @@ Money Like Water 是一个面向 Windows 的 AI 服务用量监控桌面应用�
 
 ## 下载
 
-请从 GitHub Releases 下载最新版 Windows 构建：
+请从 [GitHub Releases](https://github.com/MarioLuLu7/money-like-water/releases/latest) 下载最新版 Windows 构建。
 
-```text
-https://github.com/MarioLuLu7/money-like-water/releases/latest
-```
-
-v0.1.0 直接下载地址：
-
-```text
-https://github.com/MarioLuLu7/money-like-water/releases/download/v0.1.0/money-like-water-v0.1.0-windows-x64.zip
-```
+[下载 v0.1.0 Windows x64 版本](https://github.com/MarioLuLu7/money-like-water/releases/download/v0.1.0/money-like-water-v0.1.0-windows-x64.zip)
 
 ## 功能
 
