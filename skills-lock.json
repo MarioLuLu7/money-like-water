@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "skills": {
+    "adding-tauri-system-tray": {
+      "source": "dchuk/claude-code-tauri-skills",
+      "sourceType": "github",
+      "skillPath": "tauri/tauri-system-tray/SKILL.md",
+      "computedHash": "d79fd615d20a7357208a39527d1f00ae63091bf905a0da316abeaf9cefa5f619"
+    },
+    "customizing-tauri-windows": {
+      "source": "dchuk/claude-code-tauri-skills",
+      "sourceType": "github",
+      "skillPath": "tauri/tauri-window-customization/SKILL.md",
+      "computedHash": "37bf0dcab3267de6989e7e2930efc480739e8f4f7e1fe74ae66b0ff89250101e"
+    },
+    "desktop-applications": {
+      "source": "bobmatnyc/claude-mpm-skills",
+      "sourceType": "github",
+      "skillPath": "toolchains/rust/desktop-applications/SKILL.md",
+      "computedHash": "7ad99ba81c2413b79b803c7a474ba5836a956d6931243a315ee385a72a796712"
+    },
+    "distributing-tauri-for-windows": {
+      "source": "dchuk/claude-code-tauri-skills",
+      "sourceType": "github",
+      "skillPath": "tauri/tauri-windows-distribution/SKILL.md",
+      "computedHash": "06ed42266e2749ad8d3be7ac0d4fff7064e2791b8c47a75e4fd24c8672541681"
+    },
+    "tauri-v2": {
+      "source": "nodnarbnitram/claude-code-extensions",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/tauri-v2/SKILL.md",
+      "computedHash": "7108944eec3bef17686df9ebae9c9bdbee7809744930c8734c979e3c4573eaab"
+    },
+    "windows-desktop-e2e": {
+      "source": "affaan-m/ecc",
+      "sourceType": "github",
+      "skillPath": "skills/windows-desktop-e2e/SKILL.md",
+      "computedHash": "c6437bb2697022479d55835a0c4f5dd8c13acbcbe6938e4b42f00afb464e4cf6"
+    }
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "$schema": "./gen/schemas/desktop-schema.json",
+  "productName": "Money Like Water",
+  "version": "0.1.0",
+  "identifier": "dev.money-like-water.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Money Like Water",
+        "width": 760,
+        "height": 620,
+        "minWidth": 560,
+        "minHeight": 460,
+        "resizable": true,
+        "decorations": true,
+        "visible": true
+      },
+      {
+        "label": "meter",
+        "title": "Money Like Water Meter",
+        "width": 140,
+        "height": 48,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": true
+      }
+    ],
+    "security": {
+      "capabilities": ["default"],
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all"
+  }
+}

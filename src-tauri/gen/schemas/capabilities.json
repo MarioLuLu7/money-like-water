@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Default permissions for the Money Like Water desktop shell.","local":true,"windows":["main","meter"],"permissions":["core:default","core:window:default","core:window:allow-start-dragging"]}}

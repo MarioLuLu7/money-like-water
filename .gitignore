@@ -1,0 +1,14 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/target-codex/
+.logs/
+*.log
+
+# Local planning, logs, and scratch diagnostics
+DEVELOPMENT_PLAN.md
+DEVELOPMENT_LOG.md
+bytes_hex.txt
+extract_snippet.txt
+
+.agents
