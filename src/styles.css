@@ -263,9 +263,17 @@ button:not([class*="rt-"]):disabled {
   background-color: transparent;
 }
 
-.meter-shell,
-.meter-shell * {
+.meter-shell {
   background-color: transparent;
+  outline: 0;
+  box-shadow: none;
+  filter: none;
+}
+
+.meter-shell .taskbar-meter,
+.meter-shell .meter-carousel,
+.meter-shell .meter-carousel-item,
+.meter-shell .meter-carousel-track {
   outline: 0;
   box-shadow: none;
   filter: none;
@@ -329,8 +337,8 @@ button:not([class*="rt-"]):disabled {
   width: 100%;
   height: 4px;
   border: 0;
-  background: transparent;
-  background-color: transparent;
+  background: rgba(39, 50, 65, 0.82);
+  background-color: rgba(39, 50, 65, 0.82);
 }
 
 .meter-fill {

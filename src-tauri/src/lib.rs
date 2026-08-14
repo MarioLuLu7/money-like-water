@@ -7,6 +7,7 @@ mod tray;
 mod usage;
 
 use std::{
+    collections::HashMap,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
@@ -19,6 +20,7 @@ use tauri::{Emitter, Manager};
 pub(crate) struct UsageState {
     latest: Mutex<Option<usage::ProviderUsage>>,
     latest_success: Mutex<Option<usage::ProviderUsage>>,
+    latest_success_by_provider: Mutex<HashMap<String, usage::ProviderUsage>>,
     refreshing: AtomicBool,
 }
 
@@ -27,6 +29,7 @@ impl Default for UsageState {
         Self {
             latest: Mutex::new(None),
             latest_success: Mutex::new(None),
+            latest_success_by_provider: Mutex::new(HashMap::new()),
             refreshing: AtomicBool::new(false),
         }
     }
@@ -46,11 +49,14 @@ async fn get_usage_snapshot(
 #[tauri::command]
 async fn get_usage_snapshot_for_source(
     app: tauri::AppHandle,
+    state: tauri::State<'_, Arc<UsageState>>,
     source: String,
 ) -> Result<usage::ProviderUsage, String> {
+    let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let settings = config::load_meter_settings(&app);
-        snapshot_for_source(&app, &settings, &source)
+        let snapshot = snapshot_for_source(&app, &settings, &source);
+        snapshot_with_success_fallback(&state, snapshot)
     })
     .await
     .map_err(|err| err.to_string())
@@ -84,20 +90,30 @@ fn refresh_usage_soon(app: tauri::AppHandle, state: Arc<UsageState>) {
 }
 
 fn refresh_usage_state(app: &tauri::AppHandle, state: &UsageState) -> usage::ProviderUsage {
-    if state.refreshing.swap(true, Ordering::AcqRel) {
+    if state
+        .refreshing
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
         if let Ok(latest) = state.latest.lock() {
             if let Some(snapshot) = latest.clone() {
                 return snapshot;
             }
         }
+
+        let settings = config::load_meter_settings(app);
+        return cached_source_snapshot(state, &settings.selected_meter_source)
+            .unwrap_or_else(|| unavailable_source_snapshot(&settings.selected_meter_source));
     }
 
     let settings = config::load_meter_settings(app);
     let mut snapshot = snapshot_for_source(app, &settings, &settings.selected_meter_source);
-    snapshot.meter_items = meter_items_for_settings(app, &settings, &snapshot);
     if snapshot.status == usage::ProviderUsageStatus::Ok {
         if let Ok(mut latest_success) = state.latest_success.lock() {
             *latest_success = Some(snapshot.clone());
+        }
+        if let Ok(mut snapshots) = state.latest_success_by_provider.lock() {
+            snapshots.insert(snapshot.provider.clone(), snapshot.clone());
         }
     } else if let Ok(latest_success) = state.latest_success.lock() {
         if let Some(success) = latest_success.clone() {
@@ -119,12 +135,55 @@ fn refresh_usage_state(app: &tauri::AppHandle, state: &UsageState) -> usage::Pro
             }
         }
     }
+    snapshot = snapshot_with_success_fallback(state, snapshot);
+    snapshot.meter_items = meter_items_for_settings(app, state, &settings, &snapshot);
 
     if let Ok(mut latest) = state.latest.lock() {
         *latest = Some(snapshot.clone());
     }
     state.refreshing.store(false, Ordering::Release);
     snapshot
+}
+
+fn snapshot_with_success_fallback(
+    state: &UsageState,
+    mut snapshot: usage::ProviderUsage,
+) -> usage::ProviderUsage {
+    if snapshot.status == usage::ProviderUsageStatus::Ok {
+        if let Ok(mut snapshots) = state.latest_success_by_provider.lock() {
+            snapshots.insert(snapshot.provider.clone(), snapshot.clone());
+        }
+        return snapshot;
+    }
+
+    let Some(success) = cached_source_snapshot(state, &snapshot.provider) else {
+        return snapshot;
+    };
+
+    snapshot.windows = success.windows;
+    if snapshot.account_label.is_none() {
+        snapshot.account_label = success.account_label;
+    }
+    if snapshot.plan_label.is_none() {
+        snapshot.plan_label = success.plan_label;
+    }
+    if snapshot.credit_balance.is_none() {
+        snapshot.credit_balance = success.credit_balance;
+    }
+    snapshot.updated_at = success.updated_at;
+    snapshot.message = Some(match snapshot.message {
+        Some(message) => format!("{message} 正在沿用上次成功获取的用量数据。"),
+        None => "正在沿用上次成功获取的用量数据。".to_string(),
+    });
+    snapshot
+}
+
+fn cached_source_snapshot(state: &UsageState, provider: &str) -> Option<usage::ProviderUsage> {
+    state
+        .latest_success_by_provider
+        .lock()
+        .ok()
+        .and_then(|snapshots| snapshots.get(provider).cloned())
 }
 
 fn snapshot_for_source(
@@ -152,6 +211,7 @@ fn snapshot_for_source(
 
 fn meter_items_for_settings(
     app: &tauri::AppHandle,
+    state: &UsageState,
     settings: &config::MeterSettings,
     active_snapshot: &usage::ProviderUsage,
 ) -> Vec<usage::MeterDisplayItem> {
@@ -166,7 +226,10 @@ fn meter_items_for_settings(
             if source_id == settings.selected_meter_source {
                 active_snapshot.clone()
             } else {
-                snapshot_for_source(app, settings, &source_id)
+                snapshot_with_success_fallback(
+                    state,
+                    snapshot_for_source(app, settings, &source_id),
+                )
             }
         })
         .map(|snapshot| meter_item_from_usage(&snapshot))

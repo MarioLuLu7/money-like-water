@@ -107,25 +107,7 @@ pub async fn usage_snapshot(config: &HttpSourceConfig) -> ProviderUsage {
     let mut failures = Vec::new();
     for endpoint in endpoint_candidates(config) {
         let url = join_url(&config.base_url, &endpoint);
-        let mut request = client
-            .get(&url)
-            .header("accept", "application/json")
-            .header("user-agent", "MoneyLikeWater/0.1");
-
-        match config.auth {
-            AuthMode::Bearer => {
-                request = request.bearer_auth(config.api_key.trim());
-            }
-            AuthMode::Raw => {
-                request = request.header("authorization", config.api_key.trim());
-            }
-        }
-
-        for (name, value) in &config.headers {
-            request = request.header(name, value);
-        }
-
-        let response = match request.send().await {
+        let response = match send_with_retry(&client, config, &url).await {
             Ok(response) => response,
             Err(err) => {
                 failures.push(format!("{url}: {err}"));
@@ -189,6 +171,50 @@ pub async fn usage_snapshot(config: &HttpSourceConfig) -> ProviderUsage {
         config,
         format!("{} query failed. {}", config.label, failures.join("; ")),
     )
+}
+
+async fn send_with_retry(
+    client: &reqwest::Client,
+    config: &HttpSourceConfig,
+    url: &str,
+) -> Result<reqwest::Response, String> {
+    const MAX_ATTEMPTS: usize = 2;
+    let mut last_error = None;
+
+    for attempt in 1..=MAX_ATTEMPTS {
+        let mut request = client
+            .get(url)
+            .header("accept", "application/json")
+            .header("user-agent", "MoneyLikeWater/0.1");
+
+        match config.auth {
+            AuthMode::Bearer => {
+                request = request.bearer_auth(config.api_key.trim());
+            }
+            AuthMode::Raw => {
+                request = request.header("authorization", config.api_key.trim());
+            }
+        }
+
+        for (name, value) in &config.headers {
+            request = request.header(name, value);
+        }
+
+        match request.send().await {
+            Ok(response) if response.status().is_server_error() && attempt < MAX_ATTEMPTS => {
+                last_error = Some(format!("HTTP {}", response.status()));
+                thread::sleep(Duration::from_millis(250));
+            }
+            Ok(response) => return Ok(response),
+            Err(err) if attempt < MAX_ATTEMPTS && (err.is_timeout() || err.is_connect()) => {
+                last_error = Some(err.to_string());
+                thread::sleep(Duration::from_millis(250));
+            }
+            Err(err) => return Err(err.to_string()),
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| "request failed".to_string()))
 }
 
 fn transform_snapshot(config: &HttpSourceConfig, raw: &Value) -> Result<ProviderUsage, String> {
