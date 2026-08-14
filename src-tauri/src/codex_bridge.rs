@@ -9,6 +9,12 @@ use std::{
     time::Duration,
 };
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(6);
 
 #[derive(Debug, Clone)]
@@ -51,11 +57,17 @@ impl Drop for CodexRpc {
 
 impl CodexRpc {
     fn start(codex_path: &Path) -> Result<Self, CodexError> {
-        let mut child = Command::new(codex_path)
+        let mut command = Command::new(codex_path);
+        command
             .args(["app-server", "--stdio"])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        #[cfg(target_os = "windows")]
+        command.creation_flags(CREATE_NO_WINDOW);
+
+        let mut child = command
             .spawn()
             .map_err(|err| CodexError::new(format!("无法启动 `codex app-server`：{err}")))?;
 
@@ -214,8 +226,13 @@ pub fn read_snapshot() -> Result<CodexSnapshot, CodexError> {
 }
 
 fn ensure_codex_cli(codex_path: &Path) -> Result<(), CodexError> {
-    let output = Command::new(codex_path)
-        .arg("--version")
+    let mut command = Command::new(codex_path);
+    command.arg("--version");
+
+    #[cfg(target_os = "windows")]
+    command.creation_flags(CREATE_NO_WINDOW);
+
+    let output = command
         .output()
         .map_err(|err| CodexError::new(format!("未找到 Codex CLI：{err}")))?;
 

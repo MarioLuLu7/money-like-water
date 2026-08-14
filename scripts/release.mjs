@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
 const packageJsonPath = join(repoRoot, "package.json");
+const readmePath = join(repoRoot, "README.md");
 const tauriConfigPath = join(repoRoot, "src-tauri", "tauri.conf.json");
 const cargoTomlPath = join(repoRoot, "src-tauri", "Cargo.toml");
 const bundleRoot = join(repoRoot, "src-tauri", "target", "release", "bundle");
@@ -23,7 +24,7 @@ function main() {
     process.chdir(repoRoot);
 
     if (options.version) {
-      step(`Update app version to ${options.version}`, () => setAppVersion(options.version));
+      step(`Update app version to ${options.version}`, () => updateReleaseVersion(options.version));
     }
 
     const resolvedVersion = options.version || getAppVersion();
@@ -272,6 +273,11 @@ function getAppVersion() {
   return JSON.parse(readFileSync(tauriConfigPath, "utf8")).version;
 }
 
+function updateReleaseVersion(version) {
+  setAppVersion(version);
+  updateReadmeVersion(version);
+}
+
 function setAppVersion(version) {
   const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
   packageJson.version = version;
@@ -283,6 +289,28 @@ function setAppVersion(version) {
 
   const cargoToml = readFileSync(cargoTomlPath, "utf8").replace(/^version\s*=\s*"[^"]+"/m, `version = "${version}"`);
   writeFileSync(cargoTomlPath, cargoToml, "utf8");
+}
+
+function updateReadmeVersion(version) {
+  if (!existsSync(readmePath)) {
+    return;
+  }
+
+  const tagName = `v${version}`;
+  const installerName = `Money Like Water_${version}_x64-setup.exe`;
+  const installerUrl = `https://github.com/MarioLuLu7/money-like-water/releases/download/${tagName}/${encodeURIComponent(installerName)}`;
+  let readme = readFileSync(readmePath, "utf8");
+
+  readme = readme.replace(
+    /\[Download v[^\]]+ for Windows x64\]\([^)]+\)/,
+    `[Download ${tagName} for Windows x64](${installerUrl})`,
+  );
+  readme = readme.replace(
+    /\[下载 v[^\]]+ Windows x64 版本\]\([^)]+\)/,
+    `[下载 ${tagName} Windows x64 版本](${installerUrl})`,
+  );
+
+  writeFileSync(readmePath, readme, "utf8");
 }
 
 function getCurrentBranch() {

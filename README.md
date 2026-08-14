@@ -8,7 +8,7 @@ The app is built with Tauri 2, React, TypeScript, and Rust. It currently include
 
 Download the latest Windows build from [GitHub Releases](https://github.com/MarioLuLu7/money-like-water/releases/latest).
 
-[Download v0.1.0 for Windows x64](https://github.com/MarioLuLu7/money-like-water/releases/download/v0.1.0/money-like-water-v0.1.0-windows-x64.zip)
+[Download v0.1.2 for Windows x64](https://github.com/MarioLuLu7/money-like-water/releases/download/v0.1.2/Money%20Like%20Water_0.1.2_x64-setup.exe)
 
 ## Features
 
@@ -67,7 +67,7 @@ Run the one-command release script from the repository root:
 npm run release
 ```
 
-The script installs dependencies with `npm ci`, builds the frontend, builds the Tauri installer bundle, copies installer artifacts into `releases/v<version>`, writes `SHA256SUMS.txt`, commits changes, pushes the current branch to `origin`, creates or updates the `v<version>` tag, and uploads the installer files to GitHub Releases.
+The script installs dependencies with `npm ci`, updates app metadata and README download links when `--version` is provided, builds the frontend, builds the Tauri installer bundle, copies installer artifacts into `releases/v<version>`, writes `SHA256SUMS.txt`, commits changes, pushes the current branch to `origin`, creates or updates the `v<version>` tag, and uploads the installer files to GitHub Releases.
 
 GitHub Release publishing uses the GitHub CLI (`gh`). If `gh` is missing, the script tries to install it with `winget`; if it is not signed in yet, the script starts `gh auth login`.
 
@@ -123,7 +123,7 @@ Money Like Water 是一个面向 Windows 的 AI 服务用量监控桌面应用�
 
 请从 [GitHub Releases](https://github.com/MarioLuLu7/money-like-water/releases/latest) 下载最新版 Windows 构建。
 
-[下载 v0.1.0 Windows x64 版本](https://github.com/MarioLuLu7/money-like-water/releases/download/v0.1.0/money-like-water-v0.1.0-windows-x64.zip)
+[下载 v0.1.2 Windows x64 版本](https://github.com/MarioLuLu7/money-like-water/releases/download/v0.1.2/Money%20Like%20Water_0.1.2_x64-setup.exe)
 
 ## 功能
 

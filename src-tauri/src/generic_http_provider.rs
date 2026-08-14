@@ -8,6 +8,12 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 #[derive(Clone)]
 pub struct HttpSourceConfig {
     pub provider_id: String,
@@ -233,12 +239,18 @@ process.stdin.on('end', () => {
 });
 "#;
 
-    let mut child = Command::new("node")
+    let mut command = Command::new("node");
+    command
         .arg("-e")
         .arg(runner)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    #[cfg(target_os = "windows")]
+    command.creation_flags(CREATE_NO_WINDOW);
+
+    let mut child = command
         .spawn()
         .map_err(|err| format!("Node.js is required to run transform scripts: {err}"))?;
 
