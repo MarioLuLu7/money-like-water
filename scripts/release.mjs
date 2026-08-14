@@ -297,7 +297,7 @@ function updateReadmeVersion(version) {
   }
 
   const tagName = `v${version}`;
-  const installerName = `Money Like Water_${version}_x64-setup.exe`;
+  const installerName = githubReleaseAssetName(`Money Like Water_${version}_x64-setup.exe`);
   const installerUrl = `https://github.com/MarioLuLu7/money-like-water/releases/download/${tagName}/${encodeURIComponent(installerName)}`;
   let readme = readFileSync(readmePath, "utf8");
 
@@ -389,6 +389,7 @@ function createUpdaterManifest({ releaseDir, artifacts, tagName, version }) {
   }
 
   const repoSlug = getGitHubRepoSlug();
+  const assetName = githubReleaseAssetName(artifact.name);
   return {
     version,
     notes: `Release ${tagName}`,
@@ -396,10 +397,14 @@ function createUpdaterManifest({ releaseDir, artifacts, tagName, version }) {
     platforms: {
       "windows-x86_64": {
         signature: readFileSync(signaturePath, "utf8").trim(),
-        url: `https://github.com/${repoSlug}/releases/download/${tagName}/${encodeURIComponent(artifact.name)}`,
+        url: `https://github.com/${repoSlug}/releases/download/${tagName}/${encodeURIComponent(assetName)}`,
       },
     },
   };
+}
+
+function githubReleaseAssetName(fileName) {
+  return fileName.replace(/\s+/g, ".");
 }
 
 function selectUpdaterArtifact(artifacts) {
