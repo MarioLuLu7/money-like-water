@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "release": "node scripts/release.mjs"
   },
   "dependencies": {
     "@radix-ui/themes": "^3.3.0",

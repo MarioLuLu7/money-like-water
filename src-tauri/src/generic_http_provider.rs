@@ -38,6 +38,7 @@ pub struct HttpSourceConfig {
 #[derive(Clone, Copy)]
 pub enum AuthMode {
     Bearer,
+    Raw,
 }
 
 #[derive(Clone, Copy)]
@@ -108,6 +109,9 @@ pub async fn usage_snapshot(config: &HttpSourceConfig) -> ProviderUsage {
         match config.auth {
             AuthMode::Bearer => {
                 request = request.bearer_auth(config.api_key.trim());
+            }
+            AuthMode::Raw => {
+                request = request.header("authorization", config.api_key.trim());
             }
         }
 

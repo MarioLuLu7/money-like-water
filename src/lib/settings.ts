@@ -57,7 +57,7 @@ export type DataSourceSettings = {
   baseUrl: string;
   endpoint: string;
   apiKey: string;
-  authMode: "bearer";
+  authMode: "bearer" | "raw";
   headers: HeaderSetting[];
   parser: HttpParserSettings;
   transformScript: string;
@@ -234,6 +234,51 @@ export const builtInSources = {
     lowBalanceThreshold: 10,
     timeoutSeconds: 8,
   }),
+  siliconflow: (): DataSourceSettings => ({
+    id: "siliconflow",
+    kind: "http",
+    enabled: true,
+    label: "SiliconFlow",
+    baseUrl: "https://api.siliconflow.cn/v1",
+    endpoint: "/user/info",
+    apiKey: "",
+    authMode: "bearer",
+    headers: [],
+    parser: {
+      valueFormat: "money",
+      valuePaths: [
+        { path: "data.balance", divisor: 1 },
+        { path: "balance", divisor: 1 },
+      ],
+      currencyPaths: ["data.currency", "currency"],
+      currencyDefault: "CNY",
+      resetPaths: [],
+      windows: [],
+      arrayWindows: [],
+    },
+    transformScript: siliconflowTransformScript(),
+    lowBalanceThreshold: 10,
+    timeoutSeconds: 8,
+  }),
+  glm: (): DataSourceSettings => ({
+    id: "glm",
+    kind: "http",
+    enabled: true,
+    label: "GLM",
+    baseUrl: "https://bigmodel.cn",
+    endpoint: "/api/monitor/usage/quota/limit",
+    apiKey: "",
+    authMode: "raw",
+    headers: [],
+    parser: {
+      ...defaultParser(),
+      valueFormat: "percent",
+      currencyDefault: null,
+    },
+    transformScript: glmTransformScript(),
+    lowBalanceThreshold: 10,
+    timeoutSeconds: 8,
+  }),
   custom: (): DataSourceSettings => ({
     id: "custom-source",
     kind: "http",
@@ -270,6 +315,8 @@ export const defaultSettings: MeterSettings = {
     builtInSources.aiMember(),
     builtInSources.kimi(),
     builtInSources.deepseek(),
+    builtInSources.siliconflow(),
+    builtInSources.glm(),
   ],
   taskbarSourceIds: ["chatgpt"],
   taskbarSources: {
@@ -316,7 +363,9 @@ export const defaultSettings: MeterSettings = {
 
 export function mergeSettings(settings: Partial<MeterSettings>): MeterSettings {
   const legacySources = migrateLegacySources(settings);
-  const sources = normalizeSources(settings.sources?.length ? settings.sources : legacySources);
+  const sources = withRequiredBuiltInSources(
+    normalizeSources(settings.sources?.length ? settings.sources : legacySources),
+  );
   const selectedMeterSource = sources.some((source) => source.id === settings.selectedMeterSource)
     ? settings.selectedMeterSource!
     : sources[0]?.id ?? "chatgpt";
@@ -439,7 +488,11 @@ function normalizeSources(sources: DataSourceSettings[]): DataSourceSettings[] {
       kind: sourceKind,
       enabled: true,
       label: source.label || fallback,
-      authMode: "bearer" as const,
+      authMode: isGlmPresetSource(migratedSource)
+        ? "raw"
+        : migratedSource.authMode === "raw"
+          ? "raw"
+          : "bearer",
       headers: source.headers ?? [],
       parser: {
         ...defaultParser(),
@@ -459,6 +512,17 @@ function normalizeSources(sources: DataSourceSettings[]): DataSourceSettings[] {
         Number.isFinite(source.timeoutSeconds) && source.timeoutSeconds > 0 ? source.timeoutSeconds : 8,
     };
   });
+}
+
+function withRequiredBuiltInSources(sources: DataSourceSettings[]) {
+  const nextSources = [...sources];
+  if (!nextSources.some((source) => source.id === "siliconflow")) {
+    nextSources.push(builtInSources.siliconflow());
+  }
+  if (!nextSources.some((source) => source.id === "glm")) {
+    nextSources.push(builtInSources.glm());
+  }
+  return nextSources;
 }
 
 function shouldUseDefaultTransformScript(source: DataSourceSettings) {
@@ -498,6 +562,20 @@ function defaultTransformScriptForSource(source: DataSourceSettings) {
     return builtInSources.deepseek().transformScript;
   }
 
+  if (
+    id === "siliconflow" ||
+    id.startsWith("siliconflow-") ||
+    label.startsWith("siliconflow") ||
+    label.startsWith("硅基流动") ||
+    baseUrl === "https://api.siliconflow.cn/v1"
+  ) {
+    return builtInSources.siliconflow().transformScript;
+  }
+
+  if (isGlmPresetSource(source)) {
+    return builtInSources.glm().transformScript;
+  }
+
   if (isKimiPresetSource(source)) {
     return builtInSources.kimi().transformScript;
   }
@@ -521,6 +599,20 @@ function isKimiPresetSource(source: DataSourceSettings) {
     label.startsWith("kimi code") ||
     baseUrl === "https://api.kimi.com/coding/v1" ||
     endpoint === "/usages"
+  );
+}
+
+function isGlmPresetSource(source: DataSourceSettings) {
+  const id = source.id.toLowerCase();
+  const label = source.label.toLowerCase();
+  const baseUrl = source.baseUrl.toLowerCase();
+
+  return (
+    id === "glm" ||
+    id.startsWith("glm-") ||
+    label.startsWith("glm") ||
+    label.startsWith("智谱") ||
+    baseUrl === "https://bigmodel.cn"
   );
 }
 
@@ -742,6 +834,95 @@ return {
 };`;
 }
 
+function siliconflowTransformScript() {
+  return `const balance = Number(
+  json.data?.balance ??
+  json.data?.totalBalance ??
+  json.data?.total_balance ??
+  json.balance ??
+  json.totalBalance ??
+  json.total_balance
+);
+
+if (!Number.isFinite(balance)) throw new Error("No SiliconFlow balance field found");
+
+const currency = json.data?.currency || json.currency || "CNY";
+const prefix = currency === "USD" ? "$" : currency === "CNY" ? "CNY " : currency + " ";
+const valueLabel = prefix + balance.toFixed(balance % 1 === 0 ? 0 : 2);
+const threshold = source.lowBalanceThreshold || 10;
+const remainingPercent = Math.max(0, Math.min(100, Math.round(balance / threshold * 100)));
+
+return {
+  accountLabel: json.data?.name || json.data?.email || source.label,
+  planLabel: json.data?.status || source.baseUrl,
+  creditBalance: balance,
+  message: source.label + " current balance: " + valueLabel,
+  windows: [{
+    id: source.id + "-balance",
+    label: source.label,
+    usedPercent: 100 - remainingPercent,
+    remainingPercent,
+    valueLabel,
+    limitLabel: "SiliconFlow user info",
+    bucketId: source.id,
+    windowKey: "balance"
+  }]
+};`;
+}
+
+function glmTransformScript() {
+  return `function numberLike(value) {
+  if (typeof value === "number") return value;
+  if (typeof value === "string" && value.trim()) return Number(value);
+  return NaN;
+}
+
+function timestamp(value) {
+  if (value == null || value === "") return null;
+  const raw = Number(value);
+  if (!Number.isFinite(raw)) return typeof value === "string" ? value : null;
+  return new Date(raw > 10000000000 ? raw : raw * 1000).toISOString();
+}
+
+const limits = Array.isArray(json.data?.limits) ? json.data.limits : [];
+if (!limits.length) throw new Error("No GLM quota limits found");
+
+const labels = {
+  TOKENS_LIMIT: "Token quota",
+  TIME_LIMIT: "Monthly quota"
+};
+
+const windows = limits.map((item, index) => {
+  const limit = numberLike(item.usage ?? item.limit ?? item.total);
+  const current = numberLike(item.currentValue ?? item.current_value ?? item.used);
+  const directPercent = numberLike(item.percentage ?? item.usedPercent ?? item.used_percent);
+  const usedPercent = Number.isFinite(directPercent)
+    ? Math.max(0, Math.min(100, Math.round(directPercent)))
+    : Number.isFinite(limit) && limit > 0 && Number.isFinite(current)
+      ? Math.max(0, Math.min(100, Math.round((current / limit) * 100)))
+      : 0;
+  const type = String(item.type || "quota-" + index);
+  return {
+    id: source.id + "-" + type.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+    label: labels[type] || type,
+    usedPercent,
+    remainingPercent: 100 - usedPercent,
+    valueLabel: String(100 - usedPercent) + "%",
+    resetsAt: timestamp(item.nextResetTime ?? item.next_reset_time ?? item.resetTime ?? item.reset_time),
+    limitLabel: "GLM quota",
+    bucketId: source.id,
+    windowKey: type.toLowerCase()
+  };
+});
+
+return {
+  accountLabel: source.label,
+  planLabel: source.baseUrl,
+  message: source.label + " quota updated",
+  windows
+};`;
+}
+
 function kimiTransformScript() {
   return `const weekly = json.usage;
 if (!weekly) throw new Error("No weekly usage found");
@@ -808,7 +989,7 @@ function migrateLegacySources(settings: Partial<MeterSettings>): DataSourceSetti
   }));
 
   if (settings.aiMember) {
-    sources[2] = {
+    sources[1] = {
       ...builtInSources.aiMember(),
       enabled: settings.aiMember.enabled,
       label: settings.aiMember.label,
@@ -820,7 +1001,7 @@ function migrateLegacySources(settings: Partial<MeterSettings>): DataSourceSetti
   }
 
   if (settings.kimi) {
-    sources[3] = {
+    sources[2] = {
       ...builtInSources.kimi(),
       enabled: settings.kimi.enabled,
       label: settings.kimi.label,
@@ -832,7 +1013,7 @@ function migrateLegacySources(settings: Partial<MeterSettings>): DataSourceSetti
   }
 
   if (settings.deepseek) {
-    sources[4] = {
+    sources[3] = {
       ...builtInSources.deepseek(),
       enabled: settings.deepseek.enabled,
       label: settings.deepseek.label,

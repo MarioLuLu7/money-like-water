@@ -59,6 +59,36 @@ Build the desktop app:
 npm run tauri:build
 ```
 
+## Release Workflow
+
+Run the one-command release script from the repository root:
+
+```powershell
+npm run release
+```
+
+The script installs dependencies with `npm ci`, builds the frontend, builds the Tauri installer bundle, copies installer artifacts into `releases/v<version>`, writes `SHA256SUMS.txt`, commits changes, pushes the current branch to `origin`, creates or updates the `v<version>` tag, and uploads the installer files to GitHub Releases.
+
+GitHub Release publishing uses the GitHub CLI (`gh`). If `gh` is missing, the script tries to install it with `winget`; if it is not signed in yet, the script starts `gh auth login`.
+
+To release a new version and update the app metadata at the same time:
+
+```powershell
+npm run release -- --version 0.1.1 --message "release: v0.1.1"
+```
+
+Useful options:
+
+```powershell
+npm run release -- --skip-git
+npm run release -- --no-commit
+npm run release -- --no-push
+npm run release -- --no-github-release
+npm run release -- --no-auto-install-github-cli
+npm run release -- --no-interactive-github-login
+npm run release -- --skip-install
+```
+
 ## Configuration
 
 Open the app settings to configure data sources and taskbar behavior. For HTTP sources, provide the service base URL, endpoint, token, optional headers, and Transform JS that converts the response JSON into normalized usage windows.

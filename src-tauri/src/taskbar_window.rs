@@ -15,6 +15,11 @@ fn scaled_meter_size(scale_factor: f64) -> (i32, i32) {
 }
 
 #[cfg(target_os = "windows")]
+fn scale_px(value: i32, scale_factor: f64) -> i32 {
+    ((value as f64) * scale_factor).round() as i32
+}
+
+#[cfg(target_os = "windows")]
 #[derive(Clone, Copy)]
 struct TaskbarRect {
     left: i32,
@@ -57,41 +62,51 @@ fn calculate_meter_position(
     settings: MeterSettings,
     meter_width: i32,
     meter_height: i32,
+    scale_factor: f64,
 ) -> (i32, i32) {
     let taskbar_width = rect.right - rect.left;
     let taskbar_height = rect.bottom - rect.top;
     let horizontal_taskbar = taskbar_width >= taskbar_height;
+    let taskbar_margin = scale_px(TASKBAR_MARGIN, scale_factor);
+    let top_safe_margin = scale_px(TASKBAR_TOP_SAFE_MARGIN, scale_factor);
+    let edge_visible_margin = scale_px(TASKBAR_EDGE_VISIBLE_MARGIN, scale_factor);
+    let edge_clamp_margin = scale_px(2, scale_factor).max(1);
 
     let (base_x, base_y) = if horizontal_taskbar {
         let x = match settings.anchor {
-            MeterAnchor::Left => rect.left + TASKBAR_MARGIN,
+            MeterAnchor::Left => rect.left + taskbar_margin,
             MeterAnchor::Center => rect.left + ((taskbar_width - meter_width) / 2),
-            MeterAnchor::Right => rect.right - meter_width - TASKBAR_MARGIN,
+            MeterAnchor::Right => rect.right - meter_width - taskbar_margin,
         };
-        let y = rect.top + TASKBAR_TOP_SAFE_MARGIN;
+        let y = rect.top + top_safe_margin;
         (x, y)
     } else {
         let x = rect.left + ((taskbar_width - meter_width) / 2);
         let y = match settings.anchor {
-            MeterAnchor::Left => rect.top + TASKBAR_MARGIN,
+            MeterAnchor::Left => rect.top + taskbar_margin,
             MeterAnchor::Center => rect.top + ((taskbar_height - meter_height) / 2),
-            MeterAnchor::Right => rect.bottom - meter_height - TASKBAR_MARGIN,
+            MeterAnchor::Right => rect.bottom - meter_height - taskbar_margin,
         };
         (x, y)
     };
 
-    let adjusted_x = base_x + settings.offsets.left - settings.offsets.right;
-    let adjusted_y = base_y + settings.offsets.top - settings.offsets.bottom;
+    let adjusted_x =
+        base_x + scale_px(settings.offsets.left - settings.offsets.right, scale_factor);
+    let adjusted_y =
+        base_y + scale_px(settings.offsets.top - settings.offsets.bottom, scale_factor);
 
-    let min_x = rect.left + 2;
-    let max_x = rect.right - meter_width - 2;
+    let min_x = rect.left + edge_clamp_margin;
+    let max_x = rect.right - meter_width - edge_clamp_margin;
     let (min_y, max_y) = if horizontal_taskbar {
         (
-            rect.top - meter_height + TASKBAR_EDGE_VISIBLE_MARGIN,
-            rect.bottom - TASKBAR_EDGE_VISIBLE_MARGIN,
+            rect.top - meter_height + edge_visible_margin,
+            rect.bottom - edge_visible_margin,
         )
     } else {
-        (rect.top + 2, rect.bottom - meter_height - 2)
+        (
+            rect.top + edge_clamp_margin,
+            rect.bottom - meter_height - edge_clamp_margin,
+        )
     };
 
     (
@@ -106,14 +121,36 @@ fn calculate_meter_child_position(
     settings: MeterSettings,
     meter_width: i32,
     meter_height: i32,
+    scale_factor: f64,
+    parent_client_origin: (i32, i32),
 ) -> (i32, i32) {
-    let (screen_x, screen_y) = calculate_meter_position(rect, settings, meter_width, meter_height);
-    (screen_x - rect.left, screen_y - rect.top)
+    let (screen_x, screen_y) =
+        calculate_meter_position(rect, settings, meter_width, meter_height, scale_factor);
+    (
+        screen_x - parent_client_origin.0,
+        screen_y - parent_client_origin.1,
+    )
 }
 
 #[cfg(target_os = "windows")]
 fn wide_null(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+#[cfg(target_os = "windows")]
+fn taskbar_client_origin(
+    taskbar_hwnd: windows_sys::Win32::Foundation::HWND,
+) -> Result<(i32, i32), String> {
+    use windows_sys::Win32::Foundation::POINT;
+    use windows_sys::Win32::Graphics::Gdi::ClientToScreen;
+
+    let mut origin = POINT { x: 0, y: 0 };
+    let ok = unsafe { ClientToScreen(taskbar_hwnd, &mut origin) };
+    if ok == 0 {
+        return Err("无法读取 Windows 任务栏客户区位置。".to_string());
+    }
+
+    Ok((origin.x, origin.y))
 }
 
 #[cfg(target_os = "windows")]
@@ -124,8 +161,8 @@ fn embed_meter_in_taskbar(window: &tauri::WebviewWindow, rect: TaskbarRect) -> R
         FindWindowW, GetParent, GetWindowLongPtrW, SetParent, SetWindowLongPtrW, SetWindowPos,
         GWL_EXSTYLE, GWL_STYLE, HWND_TOP, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOOWNERZORDER,
         SWP_SHOWWINDOW, WS_BORDER, WS_CAPTION, WS_CHILD, WS_CLIPSIBLINGS, WS_DLGFRAME,
-        WS_EX_APPWINDOW, WS_EX_CLIENTEDGE, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_STATICEDGE,
-        WS_EX_TOOLWINDOW, WS_EX_WINDOWEDGE, WS_POPUP, WS_SYSMENU, WS_THICKFRAME, WS_VISIBLE,
+        WS_EX_APPWINDOW, WS_EX_CLIENTEDGE, WS_EX_NOACTIVATE, WS_EX_STATICEDGE, WS_EX_TOOLWINDOW,
+        WS_EX_WINDOWEDGE, WS_POPUP, WS_SYSMENU, WS_THICKFRAME, WS_VISIBLE,
     };
 
     let hwnd = window.hwnd().map_err(|err| err.to_string())?.0 as HWND;
@@ -140,7 +177,15 @@ fn embed_meter_in_taskbar(window: &tauri::WebviewWindow, rect: TaskbarRect) -> R
     let settings = config::load_meter_settings(&app);
     let scale_factor = window.scale_factor().unwrap_or(1.0);
     let (width, height) = scaled_meter_size(scale_factor);
-    let (x, y) = calculate_meter_child_position(rect, settings, width, height);
+    let parent_client_origin = taskbar_client_origin(taskbar_hwnd)?;
+    let (x, y) = calculate_meter_child_position(
+        rect,
+        settings,
+        width,
+        height,
+        scale_factor,
+        parent_client_origin,
+    );
 
     unsafe {
         let needs_embed = GetParent(hwnd) != taskbar_hwnd;
@@ -164,7 +209,6 @@ fn embed_meter_in_taskbar(window: &tauri::WebviewWindow, rect: TaskbarRect) -> R
             let ex_style_without_edges = ex_style
                 & !WS_EX_APPWINDOW
                 & !WS_EX_CLIENTEDGE
-                & !WS_EX_LAYERED
                 & !WS_EX_WINDOWEDGE
                 & !WS_EX_STATICEDGE;
             let child_ex_style = ex_style_without_edges | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;

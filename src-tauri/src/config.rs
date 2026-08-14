@@ -442,6 +442,8 @@ fn default_sources() -> Vec<DataSourceSettings> {
         ai_member_source(AiMemberSettings::default()),
         kimi_source(KimiSettings::default()),
         deepseek_source(DeepSeekSettings::default()),
+        siliconflow_source(),
+        glm_source(),
     ]
 }
 
@@ -595,6 +597,67 @@ fn deepseek_source(settings: DeepSeekSettings) -> DataSourceSettings {
     }
 }
 
+fn siliconflow_source() -> DataSourceSettings {
+    DataSourceSettings {
+        id: "siliconflow".to_string(),
+        kind: DataSourceKind::Http,
+        enabled: true,
+        label: "SiliconFlow".to_string(),
+        base_url: default_siliconflow_base_url(),
+        endpoint: default_siliconflow_user_info_endpoint(),
+        api_key: String::new(),
+        auth_mode: default_auth_mode(),
+        headers: Vec::new(),
+        parser: HttpParserSettings {
+            value_paths: vec![
+                ValuePathSetting {
+                    path: "data.balance".to_string(),
+                    divisor: 1.0,
+                },
+                ValuePathSetting {
+                    path: "balance".to_string(),
+                    divisor: 1.0,
+                },
+            ],
+            currency_paths: vec!["data.currency".to_string(), "currency".to_string()],
+            currency_default: Some("CNY".to_string()),
+            reset_paths: Vec::new(),
+            value_format: "money".to_string(),
+            windows: Vec::new(),
+            array_windows: Vec::new(),
+        },
+        transform_script: siliconflow_transform_script(),
+        low_balance_threshold: Some(10.0),
+        timeout_seconds: default_timeout_seconds(),
+    }
+}
+
+fn glm_source() -> DataSourceSettings {
+    DataSourceSettings {
+        id: "glm".to_string(),
+        kind: DataSourceKind::Http,
+        enabled: true,
+        label: "GLM".to_string(),
+        base_url: default_glm_quota_base_url(),
+        endpoint: default_glm_quota_endpoint(),
+        api_key: String::new(),
+        auth_mode: "raw".to_string(),
+        headers: Vec::new(),
+        parser: HttpParserSettings {
+            value_paths: Vec::new(),
+            currency_paths: Vec::new(),
+            currency_default: None,
+            reset_paths: Vec::new(),
+            value_format: "percent".to_string(),
+            windows: Vec::new(),
+            array_windows: Vec::new(),
+        },
+        transform_script: glm_transform_script(),
+        low_balance_threshold: Some(10.0),
+        timeout_seconds: default_timeout_seconds(),
+    }
+}
+
 fn default_chatgpt_base_url() -> String {
     "https://chatgpt.com/backend-api".to_string()
 }
@@ -665,6 +728,22 @@ fn default_deepseek_base_url() -> String {
 
 fn default_deepseek_balance_endpoint() -> String {
     "/user/balance".to_string()
+}
+
+fn default_siliconflow_base_url() -> String {
+    "https://api.siliconflow.cn/v1".to_string()
+}
+
+fn default_siliconflow_user_info_endpoint() -> String {
+    "/user/info".to_string()
+}
+
+fn default_glm_quota_base_url() -> String {
+    "https://bigmodel.cn".to_string()
+}
+
+fn default_glm_quota_endpoint() -> String {
+    "/api/monitor/usage/quota/limit".to_string()
 }
 
 fn config_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -780,7 +859,17 @@ fn migrate_settings(settings: &mut MeterSettings) {
         ai_member_source(settings.ai_member.clone()),
         kimi_source(settings.kimi.clone()),
         deepseek_source(settings.deepseek.clone()),
+        siliconflow_source(),
+        glm_source(),
         ];
+    }
+
+    if !settings.sources.iter().any(|source| source.id == "siliconflow") {
+        settings.sources.push(siliconflow_source());
+    }
+
+    if !settings.sources.iter().any(|source| source.id == "glm") {
+        settings.sources.push(glm_source());
     }
 
     for source in &mut settings.sources {
@@ -814,6 +903,10 @@ fn migrate_settings(settings: &mut MeterSettings) {
             source.kind = DataSourceKind::Http;
             source.parser = migrated.parser;
             source.transform_script = migrated.transform_script;
+        }
+
+        if is_glm_preset_source(source) {
+            source.auth_mode = "raw".to_string();
         }
 
         source.enabled = true;
@@ -885,6 +978,19 @@ fn default_transform_script_for_source(source: &DataSourceSettings) -> Option<St
         || base_url == default_deepseek_base_url()
     {
         return Some(deepseek_transform_script());
+    }
+
+    if id == "siliconflow"
+        || id.starts_with("siliconflow-")
+        || label.starts_with("siliconflow")
+        || label.starts_with("硅基流动")
+        || base_url == default_siliconflow_base_url()
+    {
+        return Some(siliconflow_transform_script());
+    }
+
+    if is_glm_preset_source(source) {
+        return Some(glm_transform_script());
     }
 
     if is_kimi_preset_source(source) {
@@ -1054,6 +1160,18 @@ fn is_kimi_preset_source(source: &DataSourceSettings) -> bool {
         || endpoint == default_kimi_balance_endpoint()
 }
 
+fn is_glm_preset_source(source: &DataSourceSettings) -> bool {
+    let id = source.id.to_ascii_lowercase();
+    let label = source.label.to_ascii_lowercase();
+    let base_url = source.base_url.to_ascii_lowercase();
+
+    id == "glm"
+        || id.starts_with("glm-")
+        || label.starts_with("glm")
+        || label.starts_with("智谱")
+        || base_url == default_glm_quota_base_url()
+}
+
 fn is_legacy_kimi_transform_script(script: &str) -> bool {
     script.contains("json.limits")
         && script.contains("No Kimi usage windows found")
@@ -1132,6 +1250,97 @@ return {
     bucketId: source.id,
     windowKey: "balance"
   }]
+};"#
+    .to_string()
+}
+
+fn siliconflow_transform_script() -> String {
+    r#"const balance = Number(
+  json.data?.balance ??
+  json.data?.totalBalance ??
+  json.data?.total_balance ??
+  json.balance ??
+  json.totalBalance ??
+  json.total_balance
+);
+
+if (!Number.isFinite(balance)) throw new Error("No SiliconFlow balance field found");
+
+const currency = json.data?.currency || json.currency || "CNY";
+const prefix = currency === "USD" ? "$" : currency === "CNY" ? "CNY " : currency + " ";
+const valueLabel = prefix + balance.toFixed(balance % 1 === 0 ? 0 : 2);
+const threshold = source.lowBalanceThreshold || 10;
+const remainingPercent = Math.max(0, Math.min(100, Math.round(balance / threshold * 100)));
+
+return {
+  accountLabel: json.data?.name || json.data?.email || source.label,
+  planLabel: json.data?.status || source.baseUrl,
+  creditBalance: balance,
+  message: source.label + " current balance: " + valueLabel,
+  windows: [{
+    id: source.id + "-balance",
+    label: source.label,
+    usedPercent: 100 - remainingPercent,
+    remainingPercent,
+    valueLabel,
+    limitLabel: "SiliconFlow user info",
+    bucketId: source.id,
+    windowKey: "balance"
+  }]
+};"#
+    .to_string()
+}
+
+fn glm_transform_script() -> String {
+    r#"function numberLike(value) {
+  if (typeof value === "number") return value;
+  if (typeof value === "string" && value.trim()) return Number(value);
+  return NaN;
+}
+
+function timestamp(value) {
+  if (value == null || value === "") return null;
+  const raw = Number(value);
+  if (!Number.isFinite(raw)) return typeof value === "string" ? value : null;
+  return new Date(raw > 10000000000 ? raw : raw * 1000).toISOString();
+}
+
+const limits = Array.isArray(json.data?.limits) ? json.data.limits : [];
+if (!limits.length) throw new Error("No GLM quota limits found");
+
+const labels = {
+  TOKENS_LIMIT: "Token quota",
+  TIME_LIMIT: "Monthly quota"
+};
+
+const windows = limits.map((item, index) => {
+  const limit = numberLike(item.usage ?? item.limit ?? item.total);
+  const current = numberLike(item.currentValue ?? item.current_value ?? item.used);
+  const directPercent = numberLike(item.percentage ?? item.usedPercent ?? item.used_percent);
+  const usedPercent = Number.isFinite(directPercent)
+    ? Math.max(0, Math.min(100, Math.round(directPercent)))
+    : Number.isFinite(limit) && limit > 0 && Number.isFinite(current)
+      ? Math.max(0, Math.min(100, Math.round((current / limit) * 100)))
+      : 0;
+  const type = String(item.type || "quota-" + index);
+  return {
+    id: source.id + "-" + type.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+    label: labels[type] || type,
+    usedPercent,
+    remainingPercent: 100 - usedPercent,
+    valueLabel: String(100 - usedPercent) + "%",
+    resetsAt: timestamp(item.nextResetTime ?? item.next_reset_time ?? item.resetTime ?? item.reset_time),
+    limitLabel: "GLM quota",
+    bucketId: source.id,
+    windowKey: type.toLowerCase()
+  };
+});
+
+return {
+  accountLabel: source.label,
+  planLabel: source.baseUrl,
+  message: source.label + " quota updated",
+  windows
 };"#
     .to_string()
 }

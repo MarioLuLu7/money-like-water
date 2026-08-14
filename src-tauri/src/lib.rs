@@ -221,6 +221,10 @@ fn http_config_for_source(
         "percent" => generic_http_provider::ValueKind::Percent,
         _ => generic_http_provider::ValueKind::Money,
     };
+    let auth = match source.auth_mode.as_str() {
+        "raw" => generic_http_provider::AuthMode::Raw,
+        _ => generic_http_provider::AuthMode::Bearer,
+    };
 
     generic_http_provider::HttpSourceConfig {
         provider_id: source.id.clone(),
@@ -230,7 +234,7 @@ fn http_config_for_source(
         endpoint_fallbacks: Vec::new(),
         enabled: true,
         api_key: source.api_key.clone(),
-        auth: generic_http_provider::AuthMode::Bearer,
+        auth,
         headers: source
             .headers
             .iter()

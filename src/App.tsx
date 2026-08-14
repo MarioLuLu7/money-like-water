@@ -24,7 +24,9 @@ type ActivePage = MeterSource | "settings";
 const addSourceOptions: Array<{ label: string; create: () => DataSourceSettings }> = [
   { label: "AI-MEMBER", create: builtInSources.aiMember },
   { label: "DeepSeek", create: builtInSources.deepseek },
+  { label: "GLM", create: builtInSources.glm },
   { label: "Kimi Code", create: builtInSources.kimi },
+  { label: "SiliconFlow", create: builtInSources.siliconflow },
 ];
 
 function App() {
@@ -241,56 +243,58 @@ function App() {
 
   return (
     <main className="app-shell">
-      <div className="top-navigation">
-        <nav className="page-tabs dynamic-tabs" aria-label={t("dataSources")}>
-          {draftSettings.sources.map((source) => (
-            <div className="page-tab" data-active={activePage === source.id} key={source.id}>
-              <button
-                aria-current={activePage === source.id ? "page" : undefined}
-                onClick={() => switchPage(source.id)}
-                title={source.label}
-                type="button"
-              >
-                {source.label}
-              </button>
-            </div>
-          ))}
+      <div className="top-chrome">
+        <div className="top-navigation">
+          <nav className="page-tabs dynamic-tabs" aria-label={t("dataSources")}>
+            {draftSettings.sources.map((source) => (
+              <div className="page-tab" data-active={activePage === source.id} key={source.id}>
+                <button
+                  aria-current={activePage === source.id ? "page" : undefined}
+                  onClick={() => switchPage(source.id)}
+                  title={source.label}
+                  type="button"
+                >
+                  {source.label}
+                </button>
+              </div>
+            ))}
 
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger>
-              <button aria-label={t("addSource")} className="add-source-button" type="button">
-                +
-              </button>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Content align="end" className="add-source-menu" sideOffset={6} variant="solid">
-              {addSourceOptions.map((option) => (
-                <DropdownMenu.Item key={option.label} onSelect={() => addSource(option.create)}>
-                  {option.label}
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger>
+                <button aria-label={t("addSource")} className="add-source-button" type="button">
+                  +
+                </button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Content align="end" className="add-source-menu" sideOffset={6} variant="solid">
+                {addSourceOptions.map((option) => (
+                  <DropdownMenu.Item key={option.label} onSelect={() => addSource(option.create)}>
+                    {option.label}
+                  </DropdownMenu.Item>
+                ))}
+                <DropdownMenu.Item onSelect={() => addSource(builtInSources.custom)}>
+                  {t("addCustomHttp")}
                 </DropdownMenu.Item>
-              ))}
-              <DropdownMenu.Item onSelect={() => addSource(builtInSources.custom)}>
-                {t("addCustomHttp")}
-              </DropdownMenu.Item>
-            </DropdownMenu.Content>
-          </DropdownMenu.Root>
-        </nav>
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
+          </nav>
 
-        <button
-          aria-current={activePage === "settings" ? "page" : undefined}
-          className="settings-entry-button"
-          onClick={() => switchPage("settings")}
-          type="button"
-        >
-          {t("settings")}
-        </button>
+          <button
+            aria-current={activePage === "settings" ? "page" : undefined}
+            className="settings-entry-button"
+            onClick={() => switchPage("settings")}
+            type="button"
+          >
+            {t("settings")}
+          </button>
+        </div>
+
+        <section className="save-bar" aria-label={t("saveSettingsLabel")}>
+          <span>{hasDraftChanges ? t("hasUnsavedSettings") : settingsStatus}</span>
+          <button disabled={!hasDraftChanges} onClick={() => void persistSettings()} type="button">
+            {t("saveSettings")}
+          </button>
+        </section>
       </div>
-
-      <section className="save-bar" aria-label={t("saveSettingsLabel")}>
-        <span>{hasDraftChanges ? t("hasUnsavedSettings") : settingsStatus}</span>
-        <button disabled={!hasDraftChanges} onClick={() => void persistSettings()} type="button">
-          {t("saveSettings")}
-        </button>
-      </section>
 
       {activePage === "settings" ? (
         <GlobalSettings onChangeSettings={setDraftSettings} settings={draftSettings} status={settingsStatus} />
@@ -332,7 +336,9 @@ function App() {
 function providerDisplayName(provider?: string) {
   const labels: Record<string, string> = {
     chatgpt: "ChatGPT",
+    glm: "GLM",
     kimi: "Kimi Code",
+    siliconflow: "SiliconFlow",
   };
 
   return provider ? labels[provider] ?? provider : "AI";
