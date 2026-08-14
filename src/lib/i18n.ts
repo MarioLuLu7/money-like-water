@@ -7,8 +7,12 @@ type CopyKey =
   | "apiAuth"
   | "apiKeyNeeded"
   | "apiKeyNotNeeded"
+  | "appUpdates"
   | "auto"
+  | "autoUpdates"
+  | "autoUpdatesDescription"
   | "cancel"
+  | "checkForUpdates"
   | "codexCli"
   | "codexHome"
   | "confirmDelete"
@@ -71,8 +75,13 @@ const copy: Record<AppLanguage, Record<CopyKey, string>> = {
     apiAuth: "API auth",
     apiKeyNeeded: "Required",
     apiKeyNotNeeded: "Not required",
+    appUpdates: "App updates",
     auto: "Auto",
+    autoUpdates: "Automatic updates",
+    autoUpdatesDescription:
+      "Check GitHub Releases for a signed installer update, install it, and relaunch the app.",
     cancel: "Cancel",
+    checkForUpdates: "Check for updates",
     codexCli: "Connector CLI",
     codexHome: "Connector home",
     confirmDelete: "Confirm delete",
@@ -137,19 +146,23 @@ const copy: Record<AppLanguage, Record<CopyKey, string>> = {
     apiAuth: "API 认证",
     apiKeyNeeded: "需要",
     apiKeyNotNeeded: "不需要",
+    appUpdates: "应用更新",
     auto: "自动",
+    autoUpdates: "自动更新",
+    autoUpdatesDescription: "从 GitHub Releases 检查已签名安装包，安装完成后自动重启应用。",
     cancel: "取消",
+    checkForUpdates: "检查更新",
     codexCli: "连接器 CLI",
     codexHome: "连接器目录",
     confirmDelete: "确认删除",
     copyDiagnostics: "复制诊断信息",
     currentSelection: "当前选择",
     dataSourceAccount: "数据源账号",
-    dataSourceConfig: "数据源配置",
+    dataSourceConfig: "数据源设置",
     dataSources: "数据源",
     deleteSource: "删除数据源",
     deleteSourceDescription:
-      "删除该数据源后，它会从顶部列表和任务栏轮播中移除。未保存前仍可通过不保存退出放弃这次删除。",
+      "删除该数据源后，它会从顶部列表和任务栏轮播中移除。未保存前仍可通过退出不保存来放弃这次删除。",
     displayName: "显示名称",
     endpoint: "接口路径",
     fetchToken: "一键获取",
@@ -241,4 +254,3 @@ export function statusLabel(status: ProviderUsage["status"] | "loading", languag
 
   return labels[language][status];
 }
-

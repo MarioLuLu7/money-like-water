@@ -10,10 +10,18 @@ const textSizeOptions = Array.from({ length: 13 }, (_, index) => {
 type GlobalSettingsProps = {
   settings: MeterSettings;
   status: string;
+  updateStatus: string;
   onChangeSettings: (settings: MeterSettings) => void;
+  onCheckForUpdates: () => void;
 };
 
-export function GlobalSettings({ settings, status, onChangeSettings }: GlobalSettingsProps) {
+export function GlobalSettings({
+  settings,
+  status,
+  updateStatus,
+  onChangeSettings,
+  onCheckForUpdates,
+}: GlobalSettingsProps) {
   const t = getCopy(settings.language);
   const localizedAnchorOptions = anchorOptions(settings.language) as Array<{
     value: MeterAnchor;
@@ -98,6 +106,22 @@ export function GlobalSettings({ settings, status, onChangeSettings }: GlobalSet
           <h2>{t("globalSettings")}</h2>
           <span>{status}</span>
         </div>
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-section-header">
+          <h3>{t("appUpdates")}</h3>
+        </div>
+        <div className="update-row">
+          <div>
+            <strong>{t("autoUpdates")}</strong>
+            <span>{t("autoUpdatesDescription")}</span>
+          </div>
+          <button className="compact-button" onClick={onCheckForUpdates} type="button">
+            {t("checkForUpdates")}
+          </button>
+        </div>
+        {updateStatus && <p className="compact-notice">{updateStatus}</p>}
       </div>
 
       <div className="settings-section">

@@ -547,6 +547,31 @@ button:not([class*="rt-"]):disabled {
   font-size: 12px;
 }
 
+.update-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.update-row > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.update-row strong {
+  color: #f4f7fb;
+  font-size: 13px;
+}
+
+.update-row span {
+  color: #8794a7;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .danger-button {
   border-color: #74343a;
   background: #311820;

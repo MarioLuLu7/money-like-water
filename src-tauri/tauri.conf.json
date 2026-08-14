@@ -1,7 +1,7 @@
 {
   "$schema": "./gen/schemas/desktop-schema.json",
   "productName": "Money Like Water",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "identifier": "dev.money-like-water.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -36,13 +36,28 @@
       }
     ],
     "security": {
-      "capabilities": ["default"],
+      "capabilities": [
+        "default"
+      ],
       "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {
     "active": true,
-    "targets": "all",
-    "icon": ["icons/icon.ico"]
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/icon.ico"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://github.com/MarioLuLu7/money-like-water/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM0NjNCRjQ4MEMzQUZDQTkKUldTcC9Eb01TTDlqTk9PS2I4UExDWFZqY3lCZmM0UGVZUTVMT0RERWwyUWhMWG9DUDlHTWdLR1AK"
+    }
   }
 }

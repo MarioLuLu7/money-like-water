@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync, copyFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, copyFileSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,6 +10,8 @@ const packageJsonPath = join(repoRoot, "package.json");
 const tauriConfigPath = join(repoRoot, "src-tauri", "tauri.conf.json");
 const cargoTomlPath = join(repoRoot, "src-tauri", "Cargo.toml");
 const bundleRoot = join(repoRoot, "src-tauri", "target", "release", "bundle");
+const localUpdaterKeyPath = join(repoRoot, ".tauri", "updater.key");
+const localUpdaterKeyPasswordPath = join(repoRoot, ".tauri", "updater.key.password");
 
 const options = parseArgs(process.argv.slice(2));
 let githubCliPath = "";
@@ -28,6 +30,7 @@ function main() {
     const tagName = `v${resolvedVersion}`;
     const releaseDir = join(repoRoot, "releases", tagName);
     const shouldPublishGitHubRelease = !options.noGitHubRelease;
+    ensureUpdaterSigningKey();
 
     if (shouldPublishGitHubRelease) {
       step("Check GitHub CLI", () => {
@@ -42,6 +45,10 @@ function main() {
     }
 
     step("Build frontend", () => run("npm", ["run", "build"]));
+    step("Clean previous installer bundle output", () => {
+      rmSync(bundleRoot, { recursive: true, force: true });
+      rmSync(releaseDir, { recursive: true, force: true });
+    });
     step("Build Tauri installer bundle", () => run("npm", ["run", "tauri", "--", "build"]));
 
     const artifacts = getReleaseArtifacts();
@@ -49,13 +56,32 @@ function main() {
       throw new Error(`No installer artifacts were found under ${bundleRoot}.`);
     }
 
+    step("Sign updater installer artifacts", () => {
+      for (const artifact of artifacts) {
+        signUpdaterArtifact(artifact.path);
+      }
+    });
+
     step("Collect installer artifacts", () => {
       mkdirSync(releaseDir, { recursive: true });
       for (const artifact of artifacts) {
         const destination = join(releaseDir, artifact.name);
         copyFileSync(artifact.path, destination);
         console.log(`Copied ${artifact.name}`);
+
+        if (existsSync(`${artifact.path}.sig`)) {
+          copyFileSync(`${artifact.path}.sig`, `${destination}.sig`);
+          console.log(`Copied ${artifact.name}.sig`);
+        }
       }
+
+      const manifest = createUpdaterManifest({
+        releaseDir,
+        artifacts,
+        tagName,
+        version: resolvedVersion,
+      });
+      writeFileSync(join(releaseDir, "latest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
       const checksums = listFiles(releaseDir).map((file) => {
         const hash = createHash("sha256").update(readFileSync(file.path)).digest("hex");
@@ -289,6 +315,87 @@ function getReleaseArtifacts() {
   return walkFiles(bundleRoot)
     .filter((file) => allowedExtensions.has(extname(file.path).toLowerCase()))
     .sort((a, b) => a.path.localeCompare(b.path));
+}
+
+function ensureUpdaterSigningKey() {
+  if (process.env.TAURI_SIGNING_PRIVATE_KEY || process.env.TAURI_SIGNING_PRIVATE_KEY_PATH) {
+    return;
+  }
+
+  if (existsSync(localUpdaterKeyPath)) {
+    process.env.TAURI_SIGNING_PRIVATE_KEY_PATH = localUpdaterKeyPath;
+    if (!process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD && existsSync(localUpdaterKeyPasswordPath)) {
+      process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD = readFileSync(localUpdaterKeyPasswordPath, "utf8").trim();
+    }
+    return;
+  }
+
+  throw new Error(
+    "Updater signing key not found. Generate one with `npm run tauri -- signer generate --ci -w .tauri\\updater.key`, keep it private, and rerun release.",
+  );
+}
+
+function signUpdaterArtifact(artifactPath) {
+  if (existsSync(`${artifactPath}.sig`)) {
+    return;
+  }
+
+  const args = ["run", "tauri", "--", "signer", "sign", "--private-key-path", process.env.TAURI_SIGNING_PRIVATE_KEY_PATH || localUpdaterKeyPath];
+  if (process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD) {
+    args.push("--password", process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD);
+  }
+  args.push(artifactPath);
+  run("npm", args);
+}
+
+function createUpdaterManifest({ releaseDir, artifacts, tagName, version }) {
+  const artifact = selectUpdaterArtifact(artifacts);
+  if (!artifact) {
+    throw new Error("No Windows installer artifact was available for the updater manifest.");
+  }
+
+  const copiedArtifact = join(releaseDir, artifact.name);
+  const signaturePath = `${copiedArtifact}.sig`;
+  if (!existsSync(signaturePath)) {
+    throw new Error(`Missing updater signature for ${artifact.name}. Check TAURI_SIGNING_PRIVATE_KEY_PATH or TAURI_SIGNING_PRIVATE_KEY.`);
+  }
+
+  const repoSlug = getGitHubRepoSlug();
+  return {
+    version,
+    notes: `Release ${tagName}`,
+    pub_date: new Date().toISOString(),
+    platforms: {
+      "windows-x86_64": {
+        signature: readFileSync(signaturePath, "utf8").trim(),
+        url: `https://github.com/${repoSlug}/releases/download/${tagName}/${encodeURIComponent(artifact.name)}`,
+      },
+    },
+  };
+}
+
+function selectUpdaterArtifact(artifacts) {
+  return (
+    artifacts.find((artifact) => artifact.name.toLowerCase().endsWith(".exe") && artifact.name.toLowerCase().includes("setup")) ||
+    artifacts.find((artifact) => artifact.name.toLowerCase().endsWith(".msi")) ||
+    artifacts.find((artifact) => artifact.name.toLowerCase().endsWith(".exe")) ||
+    null
+  );
+}
+
+function getGitHubRepoSlug() {
+  const result = capture("git", ["remote", "get-url", options.remote]);
+  if (!result.ok || !result.stdout) {
+    return "MarioLuLu7/money-like-water";
+  }
+
+  const remote = result.stdout.replace(/\.git$/, "");
+  const httpsMatch = remote.match(/github\.com[:/](?<owner>[^/]+)\/(?<repo>[^/]+)$/);
+  if (httpsMatch?.groups) {
+    return `${httpsMatch.groups.owner}/${httpsMatch.groups.repo}`;
+  }
+
+  return "MarioLuLu7/money-like-water";
 }
 
 function listFiles(directory) {

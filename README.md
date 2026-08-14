@@ -71,6 +71,8 @@ The script installs dependencies with `npm ci`, builds the frontend, builds the 
 
 GitHub Release publishing uses the GitHub CLI (`gh`). If `gh` is missing, the script tries to install it with `winget`; if it is not signed in yet, the script starts `gh auth login`.
 
+Automatic updates use Tauri's signed updater. Keep the local private key at `.tauri/updater.key` or set `TAURI_SIGNING_PRIVATE_KEY_PATH` / `TAURI_SIGNING_PRIVATE_KEY` before releasing. The release script signs installer artifacts and uploads `latest.json` to GitHub Releases for the app's in-app update check.
+
 To release a new version and update the app metadata at the same time:
 
 ```powershell

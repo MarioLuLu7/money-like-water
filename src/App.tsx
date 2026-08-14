@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { check, type DownloadEvent } from "@tauri-apps/plugin-updater";
 import { DropdownMenu } from "@radix-ui/themes";
 import type { ProviderUsage } from "./lib/usage";
 import {
@@ -36,6 +38,7 @@ function App() {
   const [settings, setSettings] = useState<MeterSettings>(defaultSettings);
   const [draftSettings, setDraftSettings] = useState<MeterSettings>(defaultSettings);
   const [settingsStatusKey, setSettingsStatusKey] = useState("settingsLoading");
+  const [updateStatus, setUpdateStatus] = useState("");
   const [activePage, setActivePage] = useState<ActivePage>("chatgpt");
   const [windowLabel] = useState(() => getCurrentWindow().label);
   const isMeterWindow = windowLabel === "meter";
@@ -160,6 +163,41 @@ function App() {
     activePageRef.current = selectedMeterSource;
     setUsage(null);
     setLoading(false);
+  }
+
+  async function checkForAppUpdate() {
+    const updateCopy = getUpdateCopy(draftSettings.language);
+    setUpdateStatus(updateCopy.checking);
+
+    try {
+      const update = await check();
+      if (!update) {
+        setUpdateStatus(updateCopy.upToDate);
+        return;
+      }
+
+      let downloaded = 0;
+      let contentLength = 0;
+      setUpdateStatus(updateCopy.available(update.version));
+      await update.downloadAndInstall((event: DownloadEvent) => {
+        if (event.event === "Started") {
+          downloaded = 0;
+          contentLength = event.data.contentLength ?? 0;
+          setUpdateStatus(updateCopy.downloading(update.version, null));
+        } else if (event.event === "Progress") {
+          downloaded += event.data.chunkLength;
+          const percent = contentLength > 0 ? Math.round((downloaded / contentLength) * 100) : null;
+          setUpdateStatus(updateCopy.downloading(update.version, percent));
+        } else if (event.event === "Finished") {
+          setUpdateStatus(updateCopy.installing);
+        }
+      });
+
+      setUpdateStatus(updateCopy.relaunching);
+      await relaunch();
+    } catch (err) {
+      setUpdateStatus(updateCopy.failed(err instanceof Error ? err.message : String(err)));
+    }
   }
 
   useEffect(() => {
@@ -297,7 +335,13 @@ function App() {
       </div>
 
       {activePage === "settings" ? (
-        <GlobalSettings onChangeSettings={setDraftSettings} settings={draftSettings} status={settingsStatus} />
+        <GlobalSettings
+          onChangeSettings={setDraftSettings}
+          onCheckForUpdates={checkForAppUpdate}
+          settings={draftSettings}
+          status={settingsStatus}
+          updateStatus={updateStatus}
+        />
       ) : (
         <>
           <section className="meter-band" aria-label={t("usageWindow")}>
@@ -377,6 +421,32 @@ function localizeSettingsStatus(statusKey: string, language: MeterSettings["lang
   };
 
   return statuses[statusKey] ?? statusKey;
+}
+
+function getUpdateCopy(language: MeterSettings["language"]) {
+  if (language === "zh") {
+    return {
+      checking: "正在检查更新",
+      upToDate: "已经是最新版本",
+      available: (version: string) => `发现新版本 ${version}，正在准备下载`,
+      downloading: (version: string, percent: number | null) =>
+        percent === null ? `正在下载 ${version}` : `正在下载 ${version} (${percent}%)`,
+      installing: "下载完成，正在安装更新",
+      relaunching: "更新已安装，正在重启应用",
+      failed: (message: string) => `更新失败：${message}`,
+    };
+  }
+
+  return {
+    checking: "Checking for updates",
+    upToDate: "You are already on the latest version",
+    available: (version: string) => `Update ${version} found, preparing download`,
+    downloading: (version: string, percent: number | null) =>
+      percent === null ? `Downloading ${version}` : `Downloading ${version} (${percent}%)`,
+    installing: "Download complete, installing update",
+    relaunching: "Update installed, relaunching",
+    failed: (message: string) => `Update failed: ${message}`,
+  };
 }
 
 export default App;
