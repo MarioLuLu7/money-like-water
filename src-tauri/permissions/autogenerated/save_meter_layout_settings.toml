@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-save-meter-layout-settings"
+description = "Enables the save_meter_layout_settings command without any pre-configured scope."
+commands.allow = ["save_meter_layout_settings"]
+
+[[permission]]
+identifier = "deny-save-meter-layout-settings"
+description = "Denies the save_meter_layout_settings command without any pre-configured scope."
+commands.deny = ["save_meter_layout_settings"]

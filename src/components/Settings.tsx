@@ -102,10 +102,28 @@ export function Settings({
     }
   }
 
+  async function fillAiMemberToken() {
+    setTokenStatus(settings.language === "zh" ? "请在打开的 AI-MEMBER 窗口完成登录" : "Complete login in the AI-MEMBER window");
+
+    try {
+      const token = await invoke<string>("fetch_ai_member_auth_token");
+      updateSource({ apiKey: token });
+      setTokenStatus(
+        settings.language === "zh" ? "已填入 auth_token，保存后生效" : "auth_token filled. Save to apply.",
+      );
+    } catch (err) {
+      setTokenStatus(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   const diagnosticWindows = source.kind === "chatgpt" ? usage?.windows ?? [] : [];
   const canDeleteSource = settings.sources.length > 1;
   const isShownInTaskbar = settings.taskbarSourceIds.includes(source.id);
   const canDisableTaskbarDisplay = !isShownInTaskbar || settings.taskbarSourceIds.length > 1;
+  const isAiMemberSource =
+    source.id === "ai-member" ||
+    source.id.startsWith("ai-member-") ||
+    source.baseUrl.trim().replace(/\/$/, "") === "https://proxy.ai-member.icu";
 
   return (
     <section className="settings-panel" aria-label={t("dataSourceConfig")}>
@@ -233,8 +251,15 @@ export function Settings({
                       {t("fetchToken")}
                     </button>
                   )}
+                  {isAiMemberSource && (
+                    <button className="compact-button" onClick={fillAiMemberToken} type="button">
+                      {t("fetchToken")}
+                    </button>
+                  )}
                 </span>
-                {source.id === "chatgpt" && tokenStatus && <span className="field-hint">{tokenStatus}</span>}
+                {(source.id === "chatgpt" || isAiMemberSource) && tokenStatus && (
+                  <span className="field-hint">{tokenStatus}</span>
+                )}
               </label>
               <label className="field-row">
                 {t("endpoint")}

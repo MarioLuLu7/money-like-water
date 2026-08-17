@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-toggle-meter-window"
+description = "Enables the toggle_meter_window command without any pre-configured scope."
+commands.allow = ["toggle_meter_window"]
+
+[[permission]]
+identifier = "deny-toggle-meter-window"
+description = "Denies the toggle_meter_window command without any pre-configured scope."
+commands.deny = ["toggle_meter_window"]

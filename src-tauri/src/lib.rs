@@ -15,13 +15,21 @@ use std::{
     thread,
     time::Duration,
 };
-use tauri::{Emitter, Manager};
+use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+
+const AI_MEMBER_AUTH_WINDOW_LABEL: &str = "ai-member-auth";
+const AI_MEMBER_AUTH_URL: &str = "https://proxy.ai-member.icu/";
 
 pub(crate) struct UsageState {
     latest: Mutex<Option<usage::ProviderUsage>>,
     latest_success: Mutex<Option<usage::ProviderUsage>>,
     latest_success_by_provider: Mutex<HashMap<String, usage::ProviderUsage>>,
     refreshing: AtomicBool,
+}
+
+#[derive(Default)]
+struct AiMemberAuthState {
+    token: Mutex<Option<String>>,
 }
 
 impl Default for UsageState {
@@ -33,6 +41,141 @@ impl Default for UsageState {
             refreshing: AtomicBool::new(false),
         }
     }
+}
+
+#[tauri::command]
+fn set_ai_member_auth_token(
+    window: tauri::WebviewWindow,
+    state: tauri::State<'_, Arc<AiMemberAuthState>>,
+    token: String,
+) -> Result<(), String> {
+    if window.label() != AI_MEMBER_AUTH_WINDOW_LABEL {
+        return Err("AI-MEMBER auth token can only be returned from the auth window.".to_string());
+    }
+
+    let token = token.trim();
+    if token.is_empty() {
+        return Err("AI-MEMBER auth_token is empty".to_string());
+    }
+
+    *state.token.lock().map_err(|err| err.to_string())? = Some(token.to_string());
+    Ok(())
+}
+
+#[tauri::command]
+async fn fetch_ai_member_auth_token(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Arc<AiMemberAuthState>>,
+) -> Result<String, String> {
+    {
+        let mut token = state.token.lock().map_err(|err| err.to_string())?;
+        *token = None;
+    }
+
+    if let Some(window) = app.get_webview_window(AI_MEMBER_AUTH_WINDOW_LABEL) {
+        let _ = window.close();
+    }
+
+    let auth_url = AI_MEMBER_AUTH_URL
+        .parse()
+        .map_err(|err| format!("Invalid AI-MEMBER auth URL: {err}"))?;
+
+    let window = WebviewWindowBuilder::new(
+        &app,
+        AI_MEMBER_AUTH_WINDOW_LABEL,
+        WebviewUrl::External(auth_url),
+    )
+    .title("AI-MEMBER Token")
+    .inner_size(980.0, 720.0)
+    .min_inner_size(420.0, 520.0)
+    .resizable(true)
+    .center()
+    .initialization_script(ai_member_auth_token_script())
+    .build()
+    .map_err(|err| err.to_string())?;
+
+    let _ = window.set_focus();
+
+    for _ in 0..180 {
+        if let Some(token) = state
+            .token
+            .lock()
+            .map_err(|err| err.to_string())?
+            .clone()
+        {
+            let _ = window.close();
+            return Ok(token);
+        }
+
+        if app.get_webview_window(AI_MEMBER_AUTH_WINDOW_LABEL).is_none() {
+            return Err("AI-MEMBER token window was closed before auth_token was found.".to_string());
+        }
+
+        thread::sleep(Duration::from_secs(1));
+    }
+
+    let _ = window.close();
+    Err("Timed out waiting for AI-MEMBER localStorage.auth_token.".to_string())
+}
+
+fn ai_member_auth_token_script() -> &'static str {
+    r#"
+(() => {
+  const tokenKeys = ["auth_token", "access_token", "token"];
+  const setStatus = (status) => {
+    try {
+      document.title = `AI-MEMBER Token - ${status}`;
+    } catch (_err) {}
+  };
+  const sendToken = (token, key) => {
+    if (!token || window.__moneyLikeWaterAiMemberToken === token) return;
+    window.__moneyLikeWaterAiMemberToken = token;
+    const invoke = window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke;
+    if (typeof invoke === "function") {
+      setStatus(`sending ${key}`);
+      invoke("set_ai_member_auth_token", { token })
+        .then(() => setStatus(`sent ${key}`))
+        .catch((err) => setStatus(`send failed: ${String(err).slice(0, 80)}`));
+    } else {
+      setStatus("invoke missing");
+    }
+  };
+  const readToken = () => {
+    try {
+      const storage = window.localStorage;
+      if (!storage) {
+        setStatus("localStorage missing");
+        return;
+      }
+      for (const key of tokenKeys) {
+        const token = storage.getItem(key);
+        if (token) {
+          sendToken(token, key);
+          return;
+        }
+      }
+      const keys = [];
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        if (key) keys.push(key);
+      }
+      const fuzzyKey = keys.find((key) => /auth|token/i.test(key));
+      if (fuzzyKey) {
+        const token = storage.getItem(fuzzyKey);
+        if (token) {
+          sendToken(token, fuzzyKey);
+          return;
+        }
+      }
+      setStatus(keys.length ? `waiting, keys: ${keys.slice(0, 5).join(",")}` : "waiting, no keys");
+    } catch (_err) {}
+  };
+  window.addEventListener("storage", readToken);
+  window.setInterval(readToken, 1000);
+  setStatus("waiting");
+  readToken();
+})();
+"#
 }
 
 #[tauri::command]
@@ -421,6 +564,7 @@ fn get_chatgpt_access_token() -> Result<String, String> {
 pub fn run() {
     tauri::Builder::default()
         .manage(Arc::new(UsageState::default()))
+        .manage(Arc::new(AiMemberAuthState::default()))
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
@@ -446,7 +590,9 @@ pub fn run() {
             get_meter_settings,
             save_meter_settings,
             save_meter_layout_settings,
-            get_chatgpt_access_token
+            get_chatgpt_access_token,
+            fetch_ai_member_auth_token,
+            set_ai_member_auth_token
         ])
         .run(tauri::generate_context!())
         .expect("运行 Tauri 应用失败");

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-usage-snapshot-for-source"
+description = "Enables the get_usage_snapshot_for_source command without any pre-configured scope."
+commands.allow = ["get_usage_snapshot_for_source"]
+
+[[permission]]
+identifier = "deny-get-usage-snapshot-for-source"
+description = "Denies the get_usage_snapshot_for_source command without any pre-configured scope."
+commands.deny = ["get_usage_snapshot_for_source"]

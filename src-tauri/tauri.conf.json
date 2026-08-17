@@ -37,7 +37,8 @@
     ],
     "security": {
       "capabilities": [
-        "default"
+        "default",
+        "ai-member-auth"
       ],
       "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'"
     }
