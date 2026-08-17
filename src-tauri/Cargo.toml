@@ -1,6 +1,6 @@
 [package]
 name = "money-like-water"
-version = "0.1.4"
+version = "0.1.5"
 description = "A Windows taskbar-style usage meter for ChatGPT agentic usage."
 authors = ["Money Like Water"]
 license = ""

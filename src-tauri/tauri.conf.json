@@ -1,7 +1,7 @@
 {
   "$schema": "./gen/schemas/desktop-schema.json",
   "productName": "Money Like Water",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "identifier": "dev.money-like-water.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
